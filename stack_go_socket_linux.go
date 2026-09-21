@@ -152,6 +152,18 @@ func (b *goPacketBatchIO) receive(socket *goSocket, packets []goPacketMessage, c
 }
 
 func (b *goPacketBatchIO) send(socket *goSocket, packets []goPacketMessage, connected bool, family uint8) (int, syscall.Errno) {
+	if !socket.packetGSOChecked {
+		socket.packetGSOChecked = true
+		// Kernels older than 4.18 have no UDP_SEGMENT: ip_cmsg_send skips any
+		// control message whose level is not SOL_IP instead of rejecting it, so
+		// the segment size is dropped while iovlen stays, and the batch leaves
+		// the box as a single concatenated datagram. sendmmsg reports success,
+		// so the errno fallback below never fires. Ask the kernel for the
+		// option itself: it answers ENOPROTOOPT where the cmsg would be ignored.
+		if _, err := unix.GetsockoptInt(socket.fd, unix.IPPROTO_UDP, unix.UDP_SEGMENT); err != nil {
+			socket.packetGSODisabled = true
+		}
+	}
 	coalesce := !socket.packetGSODisabled
 	sent := 0
 	for sent < len(packets) {
