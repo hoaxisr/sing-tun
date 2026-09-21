@@ -27,6 +27,7 @@ type goSocket struct {
 	token             uint32
 	registered        bool
 	packetGRO         bool
+	packetGSOChecked  bool
 	packetGSODisabled bool
 }
 
