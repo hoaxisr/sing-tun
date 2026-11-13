@@ -322,16 +322,18 @@ func (s *ForwardStage) dispatch(packet []byte, parsed *forwardPacket, meta *Forw
 			return handled
 		}
 	}
+	// Must precede the judging lookup: a held non-SYN segment removes the
+	// accept entry in ResumeJudged and the SYN is judged again, forever.
+	if parsed.protocol == uint8(header.TCPProtocolNumber) &&
+		(parsed.tcpFlags&header.TCPFlagSyn == 0 || parsed.tcpFlags&header.TCPFlagAck != 0) {
+		return false
+	}
 	judgement, judging := s.judging[key]
 	if judging {
 		if len(judgement.packets) < flowHoldPerFlow {
 			s.hold(judgement, packet, parsed, meta)
 		}
 		return true
-	}
-	if parsed.protocol == uint8(header.TCPProtocolNumber) &&
-		(parsed.tcpFlags&header.TCPFlagSyn == 0 || parsed.tcpFlags&header.TCPFlagAck != 0) {
-		return false
 	}
 	judgement = &flowJudgement{key: key}
 	if !s.hold(judgement, packet, parsed, meta) {
